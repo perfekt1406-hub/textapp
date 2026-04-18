@@ -1,0 +1,4 @@
+{
+  "$comment": "Plan A ships signaling as a long-running Node process. Serverless deploy needs a shared store; see README.",
+  "version": 2
+}
