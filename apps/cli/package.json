@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@textapp/core": "*",
+    "@textapp/signaling": "*",
     "wrtc": "^0.4.7"
   },
   "devDependencies": {
