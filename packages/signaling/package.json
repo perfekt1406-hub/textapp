@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -b tsconfig.json --force",
     "start": "node dist/server.js",
     "dev": "node --import tsx/esm src/server.ts",
     "test": "node --import tsx/esm --test src/*.test.ts"

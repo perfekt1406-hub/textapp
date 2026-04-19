@@ -4,8 +4,12 @@ Browser client for the same signaling HTTP API and `LAN_DEFAULT_ROOM` (`00000`) 
 
 ## Run locally
 
+**Easiest:** from the repo root, `npm install` then `npm run dev` — signaling + Vite together (see root README).
+
+Manual split:
+
 1. Start signaling (for example `npm run dev:signaling` from the repo root, or any reachable `packages/signaling` server).
-2. From the repo root: `npm install` then `npm run web`.
+2. From the repo root: `npm run web`.
 3. Open the URL Vite prints (default `http://127.0.0.1:5173`).
 
 By default the app uses **same-origin** signaling (`fetch` to the Vite origin). For local dev, either proxy `/join` etc. through Vite or build with a signaling base URL (see below).

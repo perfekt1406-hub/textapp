@@ -7,7 +7,7 @@
     "text-app": "./dist/main.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -b tsconfig.json --force",
     "start": "node dist/main.js",
     "dev": "node --import tsx/esm src/main.ts"
   },

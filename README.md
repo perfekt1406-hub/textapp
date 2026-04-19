@@ -44,6 +44,16 @@ If two machines both started as host before seeing each other, a background **me
 
 **Discovery limits:** guest Wi‑Fi / AP isolation / some corporate networks block broadcast or device-to-device traffic; set **`SIGNALING_BASE_URL`** to a reachable `http://host:port` on every machine (below) as a fallback.
 
+## One-command dev (signaling + web UI)
+
+From the repo root (after `npm install`; `@textapp/core` is built automatically on first `dev` if needed):
+
+```bash
+npm run dev
+```
+
+This starts **HTTP signaling** (port **8787** by default) and the **Vite web app**, picks a **LAN IPv4** for `VITE_SIGNALING_BASE_URL` so other devices on your Wi‑Fi can use the same UI without editing env vars. Override the advertised host with `TEXTAPP_DEV_HOST` if the auto-picked address is wrong (VPN, multiple NICs).
+
 ## Run signaling only (classic dev)
 
 From the repo root:
@@ -53,6 +63,8 @@ npm install
 npm run build
 npm run dev:signaling
 ```
+
+**Build:** run `npm run build` from the **repository root** (not inside a single package). It compiles `@textapp/core`, then `@textapp/signaling`, then `@textapp/cli`, then `@textapp/web`, so dependents always see built `dist/` output. You can do install + build in one step with `npm run setup`.
 
 Listens on **TCP 8787** and **UDP 8788** (discovery). Override HTTP port with `PORT`.
 

@@ -7,7 +7,9 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "setup": "npm install && npm run build",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build -w @textapp/core && npm run build -w @textapp/signaling && npm run build -w @textapp/cli && npm run build -w @textapp/web",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
     "cli": "npm run start -w @textapp/cli",
