@@ -13,8 +13,10 @@ export {
   type DiscoveryReplyMeta,
 } from "./discovery-protocol.js";
 export {
+  collectSignalingBaseUrls,
   discoverSignalingBaseUrl,
   resolveDiscoveryPortFromEnv,
+  type CollectOptions,
   type DiscoverOptions,
 } from "./discovery-client.js";
 export { startDiscoveryResponder, type DiscoveryResponder } from "./discovery-responder.js";

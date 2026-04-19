@@ -1,6 +1,7 @@
 /**
- * @fileoverview HTTP polling SignalingClient for the Plan A CLI (fetch to signaling server).
- * @module @textapp/cli/signaling-http
+ * @fileoverview HTTP `fetch` implementation of `SignalingClient` for the Plan A CLI and
+ * Plan B browser (same routes as `packages/signaling` Express app).
+ * @module @textapp/core/http-signaling-client
  */
 
 import type {
@@ -9,19 +10,46 @@ import type {
   PollResult,
   SignalingClient,
   SignalPayload,
-} from "@textapp/core";
+} from "./signaling-types.js";
 
 /**
  * Strips trailing slashes from a base URL for safe concatenation.
  *
- * @param base - User-provided SIGNALING_BASE_URL.
+ * @param base - User-provided signaling base URL.
+ * @returns Normalized base without trailing slashes.
  */
 function normalizeBase(base: string): string {
   return base.replace(/\/+$/, "");
 }
 
 /**
- * HTTP client implementing SignalingClient against the Express signaling routes.
+ * Parses JSON error body or returns text fallback.
+ *
+ * @param res - `fetch` Response with non-ok status.
+ * @returns Parsed JSON or raw text.
+ */
+async function safeJson(res: Response): Promise<unknown> {
+  try {
+    return await res.json();
+  } catch {
+    return await res.text();
+  }
+}
+
+/**
+ * Formats error payload for human-readable exceptions.
+ *
+ * @param err - Parsed JSON or string.
+ */
+function formatErr(err: unknown): string {
+  if (err && typeof err === "object" && "error" in err) {
+    return String((err as { error: unknown }).error);
+  }
+  return typeof err === "string" ? err : JSON.stringify(err);
+}
+
+/**
+ * HTTP client implementing `SignalingClient` against the reference signaling routes.
  */
 export class HttpSignalingClient implements SignalingClient {
   private readonly baseUrl: string;
@@ -29,16 +57,17 @@ export class HttpSignalingClient implements SignalingClient {
   private clientId: string | null = null;
 
   /**
-   * @param baseUrl - e.g. http://127.0.0.1:8787 (no trailing path).
+   * @param baseUrl - e.g. `http://127.0.0.1:8787` (no trailing path).
    */
   constructor(baseUrl: string) {
     this.baseUrl = normalizeBase(baseUrl);
   }
 
   /**
-   * POST /join — stores room and clientId for poll/leave/signal.
+   * POST `/join` — stores room and clientId for poll/leave/signal.
    *
    * @param room - Five-digit room code.
+   * @returns Assigned client id and initial peer list.
    */
   async join(room: string): Promise<JoinResult> {
     const res = await fetch(`${this.baseUrl}/join`, {
@@ -57,7 +86,7 @@ export class HttpSignalingClient implements SignalingClient {
   }
 
   /**
-   * POST /leave — clears local session state.
+   * POST `/leave` — clears local session state.
    */
   async leave(): Promise<void> {
     if (!this.room || !this.clientId) return;
@@ -77,7 +106,9 @@ export class HttpSignalingClient implements SignalingClient {
   }
 
   /**
-   * GET /poll — maps server signals into AddressedSignal including `to` (this client).
+   * GET `/poll` — maps server signals into `AddressedSignal` including `to` (this client).
+   *
+   * @returns Current roster and queued signals.
    */
   async poll(): Promise<PollResult> {
     if (!this.room || !this.clientId) {
@@ -104,7 +135,7 @@ export class HttpSignalingClient implements SignalingClient {
   }
 
   /**
-   * POST /signal — forwards SDP/ICE to a peer via the server queue.
+   * POST `/signal` — forwards SDP/ICE to a peer via the server queue.
    *
    * @param to - Target peer client id.
    * @param payload - Offer, answer, or ICE candidate.
@@ -128,29 +159,4 @@ export class HttpSignalingClient implements SignalingClient {
       throw new Error(`Signal failed (${res.status}): ${formatErr(err)}`);
     }
   }
-}
-
-/**
- * Parses JSON error body or returns text fallback.
- *
- * @param res - fetch Response with non-ok status.
- */
-async function safeJson(res: Response): Promise<unknown> {
-  try {
-    return await res.json();
-  } catch {
-    return await res.text();
-  }
-}
-
-/**
- * Formats error payload for human-readable exceptions.
- *
- * @param err - Parsed JSON or string.
- */
-function formatErr(err: unknown): string {
-  if (err && typeof err === "object" && "error" in err) {
-    return String((err as { error: unknown }).error);
-  }
-  return typeof err === "string" ? err : JSON.stringify(err);
 }

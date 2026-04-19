@@ -132,7 +132,7 @@ export function discoverSignalingBaseUrl(options?: DiscoverOptions): Promise<str
       socket.close();
       reject(
         new Error(
-          "No Textapp signaling found on the LAN (discovery timed out). Is a host running `text-app host` on this network?",
+          "No Textapp signaling found on the LAN (discovery timed out). Is another machine running `text-app` on this network?",
         ),
       );
     }, timeoutMs);
@@ -158,6 +158,68 @@ export function discoverSignalingBaseUrl(options?: DiscoverOptions): Promise<str
       if (httpPort === null) return;
       const host = rinfo.address;
       finish(`http://${host}:${httpPort}`);
+    });
+
+    socket.bind(0, "0.0.0.0", () => {
+      try {
+        socket.setBroadcast(true);
+      } catch {
+        /* ignore */
+      }
+      for (const addr of targets) {
+        socket.send(payload, discoveryPort, addr, (err) => {
+          if (err && !settled) {
+            settled = true;
+            clearTimeout(timer);
+            socket.close();
+            reject(err);
+          }
+        });
+      }
+    });
+  });
+}
+
+export type CollectOptions = DiscoverOptions;
+
+/**
+ * Broadcasts discovery probes and collects unique signaling base URLs until the window ends.
+ * Used to detect multiple LAN hosts so clients can pick a single canonical server.
+ *
+ * @param options - Timeout (full listen duration) and UDP discovery port.
+ * @returns Sorted unique `http://host:port` strings (may be empty).
+ */
+export function collectSignalingBaseUrls(options?: CollectOptions): Promise<string[]> {
+  const timeoutMs = options?.timeoutMs ?? 3500;
+  const discoveryPort = resolveDiscoveryPortFromEnv(options);
+  const payload = Buffer.from(TEXTAPP_DISCOVER_V1, "utf8");
+  const targets = broadcastTargets();
+
+  return new Promise((resolve, reject) => {
+    const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
+    const seen = new Set<string>();
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      socket.close();
+      resolve([...seen].sort());
+    }, timeoutMs);
+
+    socket.on("error", (e) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket.close();
+      reject(e);
+    });
+
+    socket.on("message", (msg, rinfo) => {
+      const httpPort = parseReply(msg);
+      if (httpPort === null) return;
+      const host = rinfo.address;
+      seen.add(`http://${host}:${httpPort}`);
     });
 
     socket.bind(0, "0.0.0.0", () => {

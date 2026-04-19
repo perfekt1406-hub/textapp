@@ -10,7 +10,12 @@ export {
   parseChatEnvelope,
   serializeChatEnvelope,
 } from "./envelope.js";
-export { isValidRoomCode, normalizeRoomInput, parseRoomCodeOrError } from "./room.js";
+export {
+  isValidRoomCode,
+  LAN_DEFAULT_ROOM,
+  normalizeRoomInput,
+  parseRoomCodeOrError,
+} from "./room.js";
 export { MeshCoordinator, type MeshCallbacks, type MeshCoordinatorOptions } from "./mesh.js";
 export type {
   AddressedSignal,
@@ -19,3 +24,4 @@ export type {
   SignalingClient,
   SignalPayload,
 } from "./signaling-types.js";
+export { HttpSignalingClient } from "./http-signaling-client.js";

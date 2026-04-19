@@ -19,37 +19,30 @@ LAN-oriented **WebRTC mesh chat** with **HTTPS signaling** (SDP/ICE only) and a 
 
 | Variable | Meaning |
 |----------|---------|
-| `SIGNALING_BASE_URL` | Base URL of the signaling HTTP API (no trailing path). Default: `http://127.0.0.1:8787` |
-| `PORT` | HTTP signaling port for `npm run dev:signaling` / `text-app host` (default **8787**) |
-| `TEXTAPP_DISCOVERY_PORT` | UDP discovery port (default **8788**). Use the same on host and `text-app join` if the default is blocked. |
+| `SIGNALING_BASE_URL` | If set, `text-app` skips LAN discovery and joins this URL (implicit room **00000**). |
+| `PORT` | HTTP signaling port for `npm run dev:signaling` and for the embedded host in `text-app` (default **8787**). Must match across peers on the LAN. |
+| `TEXTAPP_DISCOVERY_PORT` | UDP discovery port (default **8788**). Use the same value on every machine if the default is blocked. |
+| `TEXTAPP_AUTO_DISCOVER_MS` | How long default mode listens for LAN signaling before hosting (default **1500**). |
 
 The CLI does **not** print API keys; none are required for the in-memory dev server.
 
 ## Quick start on a LAN (recommended)
 
-One machine **hosts** signaling + discovery; others **join** with only the room code.
-
-**Host** (Computer A), from repo after `npm install && npm run build` (and `npm run link-cli` if you use the global `text-app`):
+There is **one** CLI command: **`text-app`**. Run it on every machine. The first machine on an empty network **starts signaling + discovery** (implicit room **00000**); everyone else **discovers** that host and joins.
 
 ```bash
-text-app host 12345
+text-app
 ```
 
-Starts **HTTP signaling** on **TCP 8787** (all interfaces) and **UDP discovery** on **8788**. Then the menu opens for A.
-
-**Guests** (Computer B, same Wi‑Fi):
-
-```bash
-text-app join 12345
-```
-
-The guest **broadcasts a UDP probe** on the LAN, gets the host’s HTTP port, then connects—**no typing IP addresses**.
+Discovery **broadcasts UDP probes** on the LAN, collects signaling URLs, and connects to the **lexicographically smallest** URL among responders on the same `PORT` (so split-brain hosts converge). **No typing IP addresses.**
 
 **Behavior:** the room is **created if absent** when the first client joins.
 
-**Firewall:** allow **TCP 8787** and **UDP 8788** inbound on the host if a firewall blocks them.
+If two machines both started as host before seeing each other, a background **merge check** (while hosting) reconnects the “losing” host as a client to the canonical signaling URL (same port, min URL string).
 
-**Discovery limits:** guest Wi‑Fi / AP isolation / some corporate networks block broadcast or device-to-device traffic; use `text-app chat` with `SIGNALING_BASE_URL` (below) as a fallback.
+**Firewall:** allow **TCP 8787** and **UDP 8788** inbound on the machine that ends up hosting if a firewall blocks them.
+
+**Discovery limits:** guest Wi‑Fi / AP isolation / some corporate networks block broadcast or device-to-device traffic; set **`SIGNALING_BASE_URL`** to a reachable `http://host:port` on every machine (below) as a fallback.
 
 ## Run signaling only (classic dev)
 
@@ -77,14 +70,13 @@ Or after build:
 npm run start -w @textapp/cli
 ```
 
-### Commands (summary)
+### CLI (summary)
 
 | Command | Purpose |
 |---------|---------|
-| `text-app host [room]` | Start signaling + discovery on this machine, then menu |
-| `text-app join <room>` | Discover signaling on LAN, then menu |
-| `text-app` / `text-app chat` | Use `SIGNALING_BASE_URL` or `http://127.0.0.1:8787`, prompt for room |
-| `text-app help` / `version` | Help and version |
+| `text-app` | Discover LAN signaling (implicit room **00000**) or start host if none; optional `SIGNALING_BASE_URL` skips discovery |
+| `text-app --help` / `-h` | Usage and environment |
+| `text-app --version` / `-v` | Print CLI version |
 
 After connect: wait for mesh data channels, then use the menu (list peers, direct, broadcast, refresh, leave).
 
@@ -117,11 +109,10 @@ Only I/O adapters differ; **envelope JSON** and **mesh behavior** stay aligned.
 
 If `8787` / `8788` are busy and `kill` says **Permission denied**, your IDE terminal may be in a **different PID/network namespace** than the process that owns the socket (common with devcontainers or sandboxed terminals). Try **`kill` / `fuser -k`** from a normal system terminal (SSH, TTY, or host shell), or **reboot**.
 
-**Workaround without freeing those ports:** use alternate ports (same values on host and guests):
+**Workaround without freeing those ports:** use alternate ports (same values on every machine):
 
 ```bash
-PORT=18787 TEXTAPP_DISCOVERY_PORT=18788 text-app host 12345
-TEXTAPP_DISCOVERY_PORT=18788 text-app join 12345
+PORT=18787 TEXTAPP_DISCOVERY_PORT=18788 text-app
 ```
 
 ## LAN limitations
@@ -141,8 +132,8 @@ Unit tests use Node’s built-in test runner (`node:test`) and cover room valida
 
 ### Two-process check (same LAN)
 
-1. On A: `text-app host 12345` (or `npm run dev:signaling` on A and `SIGNALING_BASE_URL=http://<A-IP>:8787` on both).
-2. On B: `text-app join 12345` (or manual URL + `text-app chat`).
+1. On A: `text-app` (or `npm run dev:signaling` on A and `SIGNALING_BASE_URL=http://<A-IP>:8787` on both).
+2. On B: `text-app` (or the same `SIGNALING_BASE_URL` if you use the dev server).
 3. Confirm **direct** and **broadcast** messages arrive with sender labels.
 
 Chat text flows **only** over `RTCDataChannel`; signaling stores **SDP/ICE** only.

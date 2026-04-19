@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * @fileoverview Terminal-only Textapp CLI: room join, WebRTC mesh via wrtc, menu for
- * direct/broadcast chat. Optional LAN discovery (`text-app join <room>`) and host mode
- * (`text-app host`) that runs signaling + discovery in-process.
+ * @fileoverview Terminal-only Textapp CLI: WebRTC mesh via wrtc, menu for direct/broadcast chat.
+ * Default LAN mode: discover signaling or become host, single implicit room (`LAN_DEFAULT_ROOM`).
+ * Optional merge when two hosts appear: canonical URL wins (lexicographic min among same-port peers).
  * @module @textapp/cli/main
  */
 
@@ -12,59 +12,53 @@ import { fileURLToPath } from "node:url";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import wrtc from "wrtc";
-import { discoverSignalingBaseUrl, startSignalingServer } from "@textapp/signaling";
 import {
+  collectSignalingBaseUrls,
+  startSignalingServer,
+  type RunningSignalingServer,
+} from "@textapp/signaling";
+import {
+  HttpSignalingClient,
   MeshCoordinator,
-  normalizeRoomInput,
-  parseRoomCodeOrError,
+  LAN_DEFAULT_ROOM,
   type ChatEnvelope,
 } from "@textapp/core";
-import { HttpSignalingClient } from "./signaling-http.js";
+import {
+  httpPortFromBaseUrl,
+  isSignalingUrlLocal,
+  pickCanonicalSignalingUrl,
+} from "./lan-discovery.js";
 
 const { RTCPeerConnection } = wrtc;
 
-const DEFAULT_SIGNALING = "http://127.0.0.1:8787";
 const POLL_MS = 500;
 
 /** Resolved package.json directory (for --version). */
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-type ParsedCli =
-  | { kind: "help" }
-  | { kind: "version" }
-  | { kind: "chat" }
-  | { kind: "host"; room?: string }
-  | { kind: "join"; room: string }
-  | { kind: "unknown"; hint?: string };
+type ParsedCli = { kind: "help" } | { kind: "version" } | { kind: "run" } | { kind: "unknown"; hint?: string };
 
 /**
- * Parses argv after `text-app`.
+ * Parses argv after `text-app`. The only user-facing command is bare `text-app`;
+ * help and version are flags only (no subcommands).
  *
  * @param argv - `process.argv`.
  */
 function parseCliArgs(argv: string[]): ParsedCli {
   const args = argv.slice(2);
-  if (args.length === 0) return { kind: "chat" };
+  if (args.length === 0) return { kind: "run" };
   const a0 = args[0];
-  if (a0 === undefined) return { kind: "chat" };
-  if (a0 === "--help" || a0 === "-h" || a0 === "help") return { kind: "help" };
-  if (a0 === "--version" || a0 === "-v" || a0 === "version") return { kind: "version" };
-  if (a0 === "chat") return { kind: "chat" };
-  if (a0 === "host") {
-    const r = args[1];
-    if (r !== undefined && !/^\d{5}$/.test(r)) {
-      return { kind: "unknown", hint: "Room after host must be exactly 5 digits, e.g. text-app host 12345" };
-    }
-    return { kind: "host", room: r };
+  if (a0 === undefined) return { kind: "run" };
+  if (a0 === "--help" || a0 === "-h") {
+    return args.length === 1 ? { kind: "help" } : { kind: "unknown", hint: "Unexpected arguments after --help." };
   }
-  if (a0 === "join") {
-    const r = args[1];
-    if (r === undefined || !/^\d{5}$/.test(r)) {
-      return { kind: "unknown", hint: "Usage: text-app join <5-digit-room>" };
-    }
-    return { kind: "join", room: r };
+  if (a0 === "--version" || a0 === "-v") {
+    return args.length === 1 ? { kind: "version" } : { kind: "unknown", hint: "Unexpected arguments after --version." };
   }
-  return { kind: "unknown" };
+  return {
+    kind: "unknown",
+    hint: "Only `text-app` (no arguments). Use `text-app --help` or `text-app -h`.",
+  };
 }
 
 /**
@@ -83,40 +77,45 @@ function readCliVersion(): string {
 }
 
 /**
- * Prints usage for `text-app` and optional subcommands.
+ * HTTP port used for initial discovery matching (`PORT` / default 8787).
+ */
+function resolvedWantedHttpPort(): number {
+  const raw = process.env.PORT ?? "8787";
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 && n <= 65535 ? n : 8787;
+}
+
+/**
+ * Prints usage for the single `text-app` entrypoint.
  */
 function printHelp(): void {
   console.log(`text-app — LAN mesh chat (Plan A)
 
 Usage:
-  text-app [command]
+  text-app
+  text-app -h | --help
+  text-app -v | --version
 
-Commands:
-  host [room]  Start signaling + discovery on this machine, then chat (room optional)
-  join <room>  Find signaling on the LAN, then join room (5-digit code only)
-  chat         Chat using SIGNALING_BASE_URL or ${DEFAULT_SIGNALING} (default)
-  help         Show this message
-  version      Print version
-
-Examples:
-  text-app host 12345              # host room 12345; others run: text-app join 12345
-  text-app join 12345              # discover host on Wi‑Fi, same room
+Behavior:
+  Run \`text-app\` with no arguments. It discovers LAN signaling for implicit room ${LAN_DEFAULT_ROOM};
+  if none is found, it starts signaling on this machine (host). Other machines then discover and join.
 
 Options:
-  -h, --help     Same as help
-  -v, --version  Same as version
+  -h, --help     Show this message
+  -v, --version  Print CLI version
 
 Environment:
-  SIGNALING_BASE_URL      Used by "chat" only (default ${DEFAULT_SIGNALING})
-  PORT                    HTTP signaling port for "host" and npm signaling (default 8787)
-  TEXTAPP_DISCOVERY_PORT  UDP discovery port; set the same on host + join if 8788 is taken
+  SIGNALING_BASE_URL         If set, skip discovery and join this URL (implicit room ${LAN_DEFAULT_ROOM})
+  PORT                       HTTP signaling port when hosting / dev server (default 8787)
+  TEXTAPP_DISCOVERY_PORT     UDP discovery port; change on all peers if 8788 is taken
+  TEXTAPP_AUTO_DISCOVER_MS   LAN discovery window before hosting (default 1500)
 `);
 }
 
 /**
  * Builds an RTCPeerConnection for LAN-oriented mesh (optional public STUN; no TURN).
  *
- * @returns A new peer connection from node-webrtc (`wrtc`).
+ * @returns A new peer connection from node-webrtc (\`wrtc\`).
  */
 function createPeerConnection(): RTCPeerConnection {
   return new RTCPeerConnection({
@@ -137,13 +136,20 @@ function printIncoming(env: ChatEnvelope, selfId: string): void {
   console.log(`[${ts}] <${env.from}> (${direct}) ${env.body}`);
 }
 
+type MenuOutcome = "done" | { migrateTo: string };
+
 /**
- * Runs the interactive menu until the user quits.
+ * Runs the interactive menu until the user quits or a LAN merge redirects to another host.
  *
  * @param rl - readline interface.
  * @param mesh - Connected mesh coordinator.
+ * @param migratePromise - Resolves with canonical URL when this host must yield to another peer.
  */
-async function runMenu(rl: readline.Interface, mesh: MeshCoordinator): Promise<void> {
+async function runMenu(
+  rl: readline.Interface,
+  mesh: MeshCoordinator,
+  migratePromise?: Promise<string>,
+): Promise<MenuOutcome> {
   for (;;) {
     console.log("\n--- Textapp menu ---");
     console.log("1) List peers in room");
@@ -151,7 +157,20 @@ async function runMenu(rl: readline.Interface, mesh: MeshCoordinator): Promise<v
     console.log("3) Send to everyone (one line)");
     console.log("4) Refresh (poll signaling now)");
     console.log("5) Leave and quit");
-    const choice = (await rl.question("Choice (1-5): ")).trim();
+
+    let choice: string;
+    if (migratePromise !== undefined) {
+      const raced = await Promise.race([
+        rl.question("Choice (1-5): ").then((c) => ({ kind: "line" as const, c })),
+        migratePromise.then((url) => ({ kind: "migrate" as const, url })),
+      ]);
+      if (raced.kind === "migrate") {
+        return { migrateTo: raced.url };
+      }
+      choice = raced.c.trim();
+    } else {
+      choice = (await rl.question("Choice (1-5): ")).trim();
+    }
 
     if (choice === "1") {
       const peers = mesh.getPeerIds();
@@ -189,7 +208,7 @@ async function runMenu(rl: readline.Interface, mesh: MeshCoordinator): Promise<v
     } else if (choice === "5") {
       await mesh.leave();
       console.log("Left room. Goodbye.");
-      return;
+      return "done";
     } else {
       console.log("Unknown choice.");
     }
@@ -197,12 +216,17 @@ async function runMenu(rl: readline.Interface, mesh: MeshCoordinator): Promise<v
 }
 
 /**
- * Runs mesh join + menu for a fixed signaling URL and room.
+ * Runs mesh join + menu for a fixed signaling URL and room; optional hosted merge to canonical peer.
  *
  * @param baseUrl - Signaling HTTP base URL.
  * @param room - Five-digit room code.
+ * @param hostedServer - When set, periodically checks for another host and migrates to lexicographic min URL.
  */
-async function runChatSession(baseUrl: string, room: string): Promise<void> {
+async function runChatSession(
+  baseUrl: string,
+  room: string,
+  hostedServer?: RunningSignalingServer,
+): Promise<void> {
   const rl = readline.createInterface({ input, output });
   const signaling = new HttpSignalingClient(baseUrl);
   const mesh = new MeshCoordinator({
@@ -225,13 +249,63 @@ async function runChatSession(baseUrl: string, room: string): Promise<void> {
     },
   });
 
+  let mergeTimer: ReturnType<typeof setInterval> | undefined;
+  let migrateNotify: ((url: string) => void) | undefined;
+  const migratePromise =
+    hostedServer !== undefined
+      ? new Promise<string>((resolve) => {
+          migrateNotify = resolve;
+        })
+      : undefined;
+
+  let mergeInFlight = false;
+  const runMergeCheck = (): void => {
+    if (hostedServer === undefined || migrateNotify === undefined) return;
+    if (mergeInFlight) return;
+    mergeInFlight = true;
+    void (async () => {
+      try {
+        const urls = await collectSignalingBaseUrls({ timeoutMs: 1200 });
+        const canonical = pickCanonicalSignalingUrl(urls, hostedServer.httpPort);
+        if (canonical === null) return;
+        if (isSignalingUrlLocal(canonical, hostedServer.httpPort)) return;
+        console.error(`\n[LAN] Another host found — merging to canonical signaling: ${canonical}`);
+        if (mergeTimer !== undefined) clearInterval(mergeTimer);
+        mesh.stopPolling();
+        await mesh.leave();
+        migrateNotify(canonical);
+      } catch (e) {
+        console.error("(merge check)", e instanceof Error ? e.message : e);
+      } finally {
+        mergeInFlight = false;
+      }
+    })();
+  };
+
+  if (hostedServer !== undefined && migratePromise !== undefined) {
+    mergeTimer = setInterval(runMergeCheck, 8000);
+    setTimeout(runMergeCheck, 3500);
+  }
+
   let joined = false;
+  /** True after menu leave (5), merge migration, or successful reconnect — avoids double `mesh.leave()`. */
+  let skipMeshLeaveInFinally = false;
   try {
     const selfId = await mesh.joinRoom(room);
     joined = true;
     console.log(`Joined room ${room} as ${selfId}. Signaling: ${baseUrl}`);
     mesh.startPolling(POLL_MS);
-    await runMenu(rl, mesh);
+    const outcome = await runMenu(rl, mesh, migratePromise);
+    if (outcome === "done") {
+      skipMeshLeaveInFinally = true;
+      return;
+    }
+    skipMeshLeaveInFinally = true;
+    await hostedServer?.close().catch(() => {});
+    console.error(`Reconnecting as client to ${outcome.migrateTo} …`);
+    rl.close();
+    await runChatSession(outcome.migrateTo, room);
+    return;
   } catch (e) {
     console.error(
       "Failed:",
@@ -240,10 +314,11 @@ async function runChatSession(baseUrl: string, room: string): Promise<void> {
     );
     process.exitCode = 1;
   } finally {
+    if (mergeTimer !== undefined) clearInterval(mergeTimer);
     mesh.stopPolling();
-    if (joined) {
+    if (joined && !skipMeshLeaveInFinally) {
       await mesh.leave().catch(() => {
-        /* already left from menu */
+        /* best-effort */
       });
     }
     rl.close();
@@ -251,46 +326,19 @@ async function runChatSession(baseUrl: string, room: string): Promise<void> {
 }
 
 /**
- * Prompts for a 5-digit room code using readline.
- *
- * @param rl - readline interface.
- * @param prompt - Question text.
- */
-async function promptRoom(rl: readline.Interface, prompt: string): Promise<string | Error> {
-  const rawRoom = await rl.question(prompt);
-  const normalized = normalizeRoomInput(rawRoom);
-  return parseRoomCodeOrError(normalized);
-}
-
-/**
  * Host mode: start signaling + discovery, then chat on localhost.
  *
- * @param roomFromArg - Optional room from argv.
+ * @param room - Five-digit room (CLI supplies `LAN_DEFAULT_ROOM` when omitted).
  */
-async function runHostMode(roomFromArg?: string): Promise<void> {
-  let room: string;
-  if (roomFromArg) {
-    room = roomFromArg;
-  } else {
-    const preRl = readline.createInterface({ input, output });
-    const r = await promptRoom(preRl, "Enter 5-digit room code: ");
-    preRl.close();
-    if (r instanceof Error) {
-      console.error(r.message);
-      process.exitCode = 1;
-      return;
-    }
-    room = r;
-  }
-
-  let server: Awaited<ReturnType<typeof startSignalingServer>> | null = null;
+async function runHostMode(room: string): Promise<void> {
+  let server: RunningSignalingServer | null = null;
   try {
     console.error("Starting signaling + LAN discovery…");
     server = await startSignalingServer();
     console.error(`[host] HTTP signaling: ${server.localBaseUrl} (listening on all interfaces)`);
     console.error(`[host] Discovery: UDP port ${server.discoveryPort}`);
-    console.error(`[host] Others on this Wi‑Fi can run: text-app join ${room}`);
-    await runChatSession(server.localBaseUrl, room);
+    console.error(`[host] Room: ${room} — others on the LAN can run: text-app`);
+    await runChatSession(server.localBaseUrl, room, server);
   } catch (e) {
     console.error("Host failed:", e instanceof Error ? e.message : e);
     process.exitCode = 1;
@@ -303,48 +351,60 @@ async function runHostMode(roomFromArg?: string): Promise<void> {
 }
 
 /**
- * Join mode: discover signaling on LAN, then chat.
- *
- * @param room - Five-digit room.
+ * LAN mode: discover same-PORT signaling or start host; single implicit room.
  */
-async function runJoinMode(room: string): Promise<void> {
+async function runLanAutoMode(): Promise<void> {
+  const explicit = process.env.SIGNALING_BASE_URL;
+  if (explicit !== undefined && explicit !== "") {
+    const baseUrl = explicit.replace(/\/+$/, "");
+    console.error(`Using SIGNALING_BASE_URL=${baseUrl} (implicit room ${LAN_DEFAULT_ROOM})`);
+    await runChatSession(baseUrl, LAN_DEFAULT_ROOM);
+    return;
+  }
+
+  const portWanted = resolvedWantedHttpPort();
+  const rawMs = process.env.TEXTAPP_AUTO_DISCOVER_MS ?? "1500";
+  const discoverTimeout = Number.isFinite(Number(rawMs)) && Number(rawMs) >= 200 ? Number(rawMs) : 1500;
+
+  console.error(`Looking for LAN signaling (implicit room ${LAN_DEFAULT_ROOM})…`);
+  let urls: string[] = [];
   try {
-    console.error("Looking for Textapp signaling on the LAN…");
-    const baseUrl = await discoverSignalingBaseUrl();
-    console.error(`Found signaling at ${baseUrl}`);
-    await runChatSession(baseUrl, room);
+    urls = await collectSignalingBaseUrls({ timeoutMs: discoverTimeout });
   } catch (e) {
     console.error(e instanceof Error ? e.message : e);
     process.exitCode = 1;
-  }
-}
-
-/**
- * Default chat mode: manual SIGNALING_BASE_URL and prompted room.
- */
-async function runDefaultChatMode(): Promise<void> {
-  const baseUrl = process.env.SIGNALING_BASE_URL ?? DEFAULT_SIGNALING;
-  const rl = readline.createInterface({ input, output });
-  const roomOrErr = await promptRoom(
-    rl,
-    "Enter 5-digit room code (creates room if empty): ",
-  );
-  rl.close();
-  if (roomOrErr instanceof Error) {
-    console.error(roomOrErr.message);
-    process.exitCode = 1;
     return;
   }
-  await runChatSession(baseUrl, roomOrErr);
+
+  let canonical = pickCanonicalSignalingUrl(urls, portWanted);
+  if (canonical === null && urls.length > 0) {
+    const ports = [...new Set(urls.map((u) => httpPortFromBaseUrl(u)).filter((p): p is number => p !== null))];
+    console.error(
+      `[LAN] Discovery found ${urls.length} URL(s) but none on PORT=${portWanted}. Using lexicographic min.`,
+    );
+    canonical = urls.reduce((a, b) => (a < b ? a : b));
+    if (ports.length > 1) {
+      console.error(`[LAN] Warning: multiple HTTP ports seen (${ports.join(", ")}); ensure PORT matches across peers.`);
+    }
+  }
+
+  if (canonical !== null) {
+    console.error(`Joining signaling at ${canonical}`);
+    await runChatSession(canonical, LAN_DEFAULT_ROOM);
+    return;
+  }
+
+  console.error("No LAN signaling found — starting host on this machine…");
+  await runHostMode(LAN_DEFAULT_ROOM);
 }
 
 /**
- * Program entry: subcommands host / join / chat / help / version.
+ * Program entry: bare `text-app` runs LAN discover-or-host; `--help` / `--version` only.
  */
 async function main(): Promise<void> {
   const parsed = parseCliArgs(process.argv);
   if (parsed.kind === "unknown") {
-    console.error(parsed.hint ?? "Unknown command. Run `text-app help`.");
+    console.error(parsed.hint ?? "Run `text-app --help`.");
     process.exitCode = 1;
     return;
   }
@@ -356,15 +416,7 @@ async function main(): Promise<void> {
     console.log(readCliVersion());
     return;
   }
-  if (parsed.kind === "host") {
-    await runHostMode(parsed.room);
-    return;
-  }
-  if (parsed.kind === "join") {
-    await runJoinMode(parsed.room);
-    return;
-  }
-  await runDefaultChatMode();
+  await runLanAutoMode();
 }
 
 void main();

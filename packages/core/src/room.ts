@@ -5,6 +5,12 @@
  */
 
 /**
+ * Fixed room id for the single implicit LAN session (one mesh per signaling deployment).
+ * CLI auto / join-default modes use this so users never type a room code.
+ */
+export const LAN_DEFAULT_ROOM = "00000";
+
+/**
  * Returns true if the string is exactly five ASCII digits (0–9).
  *
  * @param room - Candidate room code from user input or API.
