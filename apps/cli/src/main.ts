@@ -192,12 +192,15 @@ async function runMenu(
         continue;
       }
       const line = await rl.question("Message line: ");
-      mesh.sendDirect(peers[n - 1]!, line);
-      console.log("Sent.");
+      if (mesh.sendDirect(peers[n - 1]!, line)) {
+        console.log("Sent.");
+      }
     } else if (choice === "3") {
       const line = await rl.question("Message line: ");
-      mesh.broadcast(line);
-      console.log("Broadcast sent (if channels were open).");
+      const n = mesh.broadcast(line);
+      if (n > 0) {
+        console.log(`Broadcast sent to ${n} peer(s).`);
+      }
     } else if (choice === "4") {
       try {
         await mesh.tick();

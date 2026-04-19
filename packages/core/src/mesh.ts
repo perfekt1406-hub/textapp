@@ -115,10 +115,12 @@ export class MeshCoordinator {
 
   /**
    * Single poll/negotiation tick: fetch roster and signals, update mesh.
+   * Roster must be applied (and polite negotiation awaited) before handling
+   * signals so SDP/ICE for new peers is never processed before the local session exists.
    */
   async tick(): Promise<void> {
     const result = await this.signaling.poll();
-    this.applyRoster(result.peers);
+    await this.applyRoster(result.peers);
     for (const s of result.signals) {
       await this.handleAddressedSignal(s);
     }
@@ -129,13 +131,16 @@ export class MeshCoordinator {
    *
    * @param toPeerId - Target peer client id.
    * @param body - Message body.
+   * @returns True if the message was sent on an open channel.
    */
-  sendDirect(toPeerId: string, body: string): void {
+  sendDirect(toPeerId: string, body: string): boolean {
     const self = this.requireClientId();
     const session = this.peers.get(toPeerId);
     if (!session?.channel || session.channel.readyState !== "open") {
-      this.callbacks.onError(`No open data channel to peer ${toPeerId}`);
-      return;
+      this.callbacks.onError(
+        `No open data channel to peer ${toPeerId}. Wait until the mesh finishes WebRTC setup (see onPeerConnected), or try Refresh.`,
+      );
+      return false;
     }
     const env = createChatEnvelope({
       id: randomId(),
@@ -145,14 +150,17 @@ export class MeshCoordinator {
       ts: Date.now(),
     });
     session.channel.send(serializeChatEnvelope(env));
+    return true;
   }
 
   /**
    * Sends the same envelope to every peer with an open data channel (broadcast).
+   * Signaling "join" only registers you; WebRTC must finish before channels open.
    *
    * @param body - Message body.
+   * @returns Number of peers that received the message (0 if none had open channels).
    */
-  broadcast(body: string): void {
+  broadcast(body: string): number {
     const self = this.requireClientId();
     const env = createChatEnvelope({
       id: randomId(),
@@ -170,8 +178,14 @@ export class MeshCoordinator {
       }
     }
     if (sent === 0) {
-      this.callbacks.onError("Broadcast failed: no open data channels yet.");
+      const noRemotes = this.peers.size === 0;
+      this.callbacks.onError(
+        noRemotes
+          ? "Broadcast failed: no other peers in the room yet. Run text-app on another device, then use option 1 until peers appear."
+          : "Broadcast failed: data channels still opening. Wait for (mesh) Data channel open to <peer> for each remote, or use option 4 (Refresh).",
+      );
     }
+    return sent;
   }
 
   /**
@@ -199,10 +213,12 @@ export class MeshCoordinator {
 
   /**
    * Applies roster diff: connects to new peers, removes left peers.
+   * Awaits each new session so the polite peer finishes sending its offer before
+   * this tick continues to inbound signals (avoids races with `void ensureSession`).
    *
    * @param roster - Full list of client ids in the room from signaling.
    */
-  private applyRoster(roster: string[]): void {
+  private async applyRoster(roster: string[]): Promise<void> {
     const next = [...new Set(roster)].sort();
     this.lastRoster = next;
     const self = this.clientId;
@@ -210,12 +226,12 @@ export class MeshCoordinator {
     const others = next.filter((id) => id !== self);
     for (const peerId of others) {
       if (!this.peers.has(peerId)) {
-        void this.ensureSession(peerId);
+        await this.ensureSession(peerId);
       }
     }
     for (const existing of [...this.peers.keys()]) {
       if (!others.includes(existing)) {
-        void this.removePeer(existing);
+        await this.removePeer(existing);
       }
     }
   }
@@ -246,14 +262,14 @@ export class MeshCoordinator {
     const session: PeerSession = { pc, channel: null, pendingRemoteIce: [] };
 
     pc.onicecandidate = (ev) => {
-      if (!ev.candidate) return;
-      const cand = ev.candidate;
-      void this.signaling.sendSignal(peerId, {
-        kind: "ice",
-        candidate: cand.candidate,
-        sdpMid: cand.sdpMid,
-        sdpMLineIndex: cand.sdpMLineIndex,
-      });
+      if (ev.candidate == null) {
+        return;
+      }
+      const wire = iceCandidateToWirePayload(ev.candidate);
+      if (!wire) {
+        return;
+      }
+      void this.signaling.sendSignal(peerId, wire);
     };
 
     pc.onconnectionstatechange = () => {
@@ -438,6 +454,34 @@ export class MeshCoordinator {
     }
     return this.clientId;
   }
+}
+
+/**
+ * Converts a local `RTCIceCandidate` from `onicecandidate` into the signaling wire
+ * shape. Uses `toJSON()` when present so `node:wrtc` and browsers serialize the same fields.
+ *
+ * @param c - Non-null ICE candidate from the peer connection.
+ * @returns Payload for `sendSignal`, or null if the candidate string is empty.
+ */
+function iceCandidateToWirePayload(c: RTCIceCandidate): Extract<SignalPayload, { kind: "ice" }> | null {
+  const j =
+    typeof c.toJSON === "function"
+      ? c.toJSON()
+      : {
+          candidate: c.candidate,
+          sdpMid: c.sdpMid,
+          sdpMLineIndex: c.sdpMLineIndex,
+        };
+  const candidate =
+    typeof j.candidate === "string" && j.candidate.length > 0 ? j.candidate : String(c.candidate ?? "");
+  if (candidate.length === 0) {
+    return null;
+  }
+  const sdpMid = j.sdpMid ?? c.sdpMid ?? null;
+  const rawIdx = j.sdpMLineIndex ?? c.sdpMLineIndex;
+  const sdpMLineIndex =
+    rawIdx === undefined || rawIdx === null ? null : typeof rawIdx === "number" ? rawIdx : null;
+  return { kind: "ice", candidate, sdpMid, sdpMLineIndex };
 }
 
 /**
