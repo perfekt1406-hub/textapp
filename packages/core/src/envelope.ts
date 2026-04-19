@@ -26,6 +26,11 @@ export type ChatEnvelope = {
   body: string;
   /** Client-side Unix epoch milliseconds when the message was composed. */
   ts: number;
+  /**
+   * When set on a direct envelope, recipients route the message into a named group
+   * thread (subset chat) instead of a plain 1:1 DM. Omitted for broadcast and DMs.
+   */
+  groupId?: string;
 };
 
 /**
@@ -40,8 +45,10 @@ export function createChatEnvelope(params: {
   to: string | null;
   body: string;
   ts: number;
+  /** Optional group thread id; only meaningful when `to` is a peer id. */
+  groupId?: string;
 }): ChatEnvelope {
-  return {
+  const env: ChatEnvelope = {
     v: PROTOCOL_VERSION,
     id: params.id,
     from: params.from,
@@ -49,6 +56,10 @@ export function createChatEnvelope(params: {
     body: params.body,
     ts: params.ts,
   };
+  if (params.groupId !== undefined) {
+    env.groupId = params.groupId;
+  }
+  return env;
 }
 
 /**
@@ -86,7 +97,14 @@ export function parseChatEnvelope(raw: string): ChatEnvelope | Error {
   if (typeof o.ts !== "number" || !Number.isFinite(o.ts)) {
     return new Error("Invalid envelope ts");
   }
-  return {
+  let groupId: string | undefined;
+  if (o.groupId !== undefined) {
+    if (typeof o.groupId !== "string" || o.groupId.length === 0) {
+      return new Error("Invalid envelope groupId");
+    }
+    groupId = o.groupId;
+  }
+  const env: ChatEnvelope = {
     v: PROTOCOL_VERSION,
     id: o.id,
     from: o.from,
@@ -94,6 +112,10 @@ export function parseChatEnvelope(raw: string): ChatEnvelope | Error {
     body: o.body,
     ts: o.ts,
   };
+  if (groupId !== undefined) {
+    env.groupId = groupId;
+  }
+  return env;
 }
 
 /**

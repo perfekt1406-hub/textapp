@@ -43,6 +43,38 @@ describe("parseChatEnvelope", () => {
     }
   });
 
+  it("accepts direct with optional groupId", () => {
+    const raw = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      id: "m3",
+      from: "a",
+      to: "b",
+      body: "g",
+      ts: 3,
+      groupId: "grp-1",
+    });
+    const r = parseChatEnvelope(raw);
+    assert.ok(!(r instanceof Error));
+    if (!(r instanceof Error)) {
+      assert.equal(r.groupId, "grp-1");
+    }
+  });
+
+  it("rejects empty groupId string", () => {
+    const r = parseChatEnvelope(
+      JSON.stringify({
+        v: PROTOCOL_VERSION,
+        id: "x",
+        from: "a",
+        to: "b",
+        body: "",
+        ts: 0,
+        groupId: "",
+      }),
+    );
+    assert.ok(r instanceof Error);
+  });
+
   it("rejects bad version", () => {
     const r = parseChatEnvelope(
       JSON.stringify({

@@ -131,9 +131,10 @@ export class MeshCoordinator {
    *
    * @param toPeerId - Target peer client id.
    * @param body - Message body.
+   * @param groupId - Optional stable group id so recipients route into a group thread.
    * @returns True if the message was sent on an open channel.
    */
-  sendDirect(toPeerId: string, body: string): boolean {
+  sendDirect(toPeerId: string, body: string, groupId?: string): boolean {
     const self = this.requireClientId();
     const session = this.peers.get(toPeerId);
     if (!session?.channel || session.channel.readyState !== "open") {
@@ -148,9 +149,57 @@ export class MeshCoordinator {
       to: toPeerId,
       body,
       ts: Date.now(),
+      ...(groupId !== undefined ? { groupId } : {}),
     });
     session.channel.send(serializeChatEnvelope(env));
     return true;
+  }
+
+  /**
+   * Sends one logical group message as direct copies to each recipient, sharing id/timestamp.
+   * Each envelope includes `groupId` so clients can dedupe and render a single group thread.
+   *
+   * @param groupId - Stable id for the group (UUID).
+   * @param recipientPeerIds - Remote peer ids to receive the message (exclude self).
+   * @param body - Message body.
+   * @returns Count of peers that accepted the send and the shared logical message id (for UI echo).
+   */
+  sendGroup(
+    groupId: string,
+    recipientPeerIds: string[],
+    body: string,
+  ): { sent: number; messageId: string } {
+    const self = this.requireClientId();
+    const uniqueTargets = [...new Set(recipientPeerIds)].filter((id) => id !== self);
+    if (uniqueTargets.length === 0) {
+      this.callbacks.onError("Group send failed: no recipients selected.");
+      return { sent: 0, messageId: "" };
+    }
+    const messageId = randomId();
+    const ts = Date.now();
+    let sent = 0;
+    for (const peerId of uniqueTargets) {
+      const session = this.peers.get(peerId);
+      if (!session?.channel || session.channel.readyState !== "open") {
+        continue;
+      }
+      const env = createChatEnvelope({
+        id: messageId,
+        from: self,
+        to: peerId,
+        body,
+        ts,
+        groupId,
+      });
+      session.channel.send(serializeChatEnvelope(env));
+      sent += 1;
+    }
+    if (sent === 0) {
+      this.callbacks.onError(
+        "Group send failed: no open data channels to the selected members. Wait for mesh connections or refresh.",
+      );
+    }
+    return { sent, messageId };
   }
 
   /**

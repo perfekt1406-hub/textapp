@@ -130,10 +130,16 @@ function createPeerConnection(): RTCPeerConnection {
  * @param selfId - This session's client id (for direct targeting).
  */
 function printIncoming(env: ChatEnvelope, selfId: string): void {
-  const direct =
-    env.to !== null && env.to === selfId ? "direct" : env.to === null ? "broadcast" : "other";
+  let mode: string;
+  if (env.to === null) {
+    mode = "broadcast";
+  } else if (env.to === selfId) {
+    mode = env.groupId !== undefined ? `direct [group ${env.groupId}]` : "direct";
+  } else {
+    mode = "other";
+  }
   const ts = new Date(env.ts).toISOString();
-  console.log(`[${ts}] <${env.from}> (${direct}) ${env.body}`);
+  console.log(`[${ts}] <${env.from}> (${mode}) ${env.body}`);
 }
 
 type MenuOutcome = "done" | { migrateTo: string };

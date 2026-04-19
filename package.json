@@ -11,6 +11,7 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
     "cli": "npm run start -w @textapp/cli",
+    "web": "npm run dev -w @textapp/web",
     "link-cli": "npm run build -w @textapp/cli && npm link -w @textapp/cli",
     "signaling": "npm run start -w @textapp/signaling",
     "dev:signaling": "npm run dev -w @textapp/signaling"

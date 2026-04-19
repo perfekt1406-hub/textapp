@@ -1,4 +1,8 @@
 {
-  "$comment": "Plan A ships signaling as a long-running Node process. Serverless deploy needs a shared store; see README.",
-  "version": 2
+  "$comment": "Static Vite export from apps/web. Point VITE_SIGNALING_BASE_URL at your long-running signaling server (same API as packages/signaling). Serverless in-memory signaling still needs a shared store — see Plan A README.",
+  "version": 2,
+  "installCommand": "npm install",
+  "buildCommand": "npm run build -w @textapp/core && npm run build -w @textapp/web",
+  "outputDirectory": "apps/web/dist",
+  "routes": [{ "handle": "filesystem" }, { "src": "/(.*)", "dest": "/index.html" }]
 }
