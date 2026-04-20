@@ -1,6 +1,6 @@
 /**
  * @fileoverview Public exports for signaling HTTP handlers and in-memory store.
- * @module @textapp/signaling
+ * @module @textr/signaling
  */
 
 export { createHttpHandlers } from "./http-handlers.js";
@@ -8,8 +8,8 @@ export { MemorySignalingStore } from "./memory-store.js";
 export type { QueuedSignal, WireSignalPayload } from "./types.js";
 export {
   DEFAULT_DISCOVERY_PORT,
-  TEXTAPP_DISCOVER_V1,
-  TEXTAPP_SIGNALING_V1_PREFIX,
+  TEXTR_DISCOVER_V1,
+  TEXTR_SIGNALING_V1_PREFIX,
   type DiscoveryReplyMeta,
 } from "./discovery-protocol.js";
 export {
@@ -26,3 +26,9 @@ export {
   type RunningSignalingServer,
   type StartSignalingServerOptions,
 } from "./signaling-server.js";
+export {
+  httpPortFromBaseUrl,
+  isSignalingUrlLocal,
+  listLocalIPv4Addresses,
+  pickCanonicalSignalingUrl,
+} from "./lan-discovery.js";

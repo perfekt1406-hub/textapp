@@ -1,11 +1,11 @@
 /**
  * @fileoverview Express-style HTTP handlers for join, leave, poll, and signal POST.
  * Used by the standalone server and can be wrapped for Vercel.
- * @module @textapp/signaling/http-handlers
+ * @module @textr/signaling/http-handlers
  */
 
 import type { Request, Response } from "express";
-import { isValidRoomCode } from "@textapp/core";
+import { isValidRoomCode } from "@textr/core";
 import type { MemorySignalingStore } from "./memory-store.js";
 import type { WireSignalPayload } from "./types.js";
 

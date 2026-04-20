@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @fileoverview Terminal-only Textapp CLI: WebRTC mesh via wrtc, menu for direct/broadcast chat.
+ * @fileoverview Terminal-only Textr CLI: WebRTC mesh via wrtc, menu for direct/broadcast chat.
  * Default LAN mode: discover signaling or become host, single implicit room (`LAN_DEFAULT_ROOM`).
  * Optional merge when two hosts appear: canonical URL wins (lexicographic min among same-port peers).
- * @module @textapp/cli/main
+ * @module @textr/cli/main
  */
 
 import { readFileSync } from "node:fs";
@@ -14,20 +14,18 @@ import { stdin as input, stdout as output } from "node:process";
 import wrtc from "wrtc";
 import {
   collectSignalingBaseUrls,
+  httpPortFromBaseUrl,
+  isSignalingUrlLocal,
+  pickCanonicalSignalingUrl,
   startSignalingServer,
   type RunningSignalingServer,
-} from "@textapp/signaling";
+} from "@textr/signaling";
 import {
   HttpSignalingClient,
   MeshCoordinator,
   LAN_DEFAULT_ROOM,
   type ChatEnvelope,
-} from "@textapp/core";
-import {
-  httpPortFromBaseUrl,
-  isSignalingUrlLocal,
-  pickCanonicalSignalingUrl,
-} from "./lan-discovery.js";
+} from "@textr/core";
 
 const { RTCPeerConnection } = wrtc;
 
@@ -36,10 +34,55 @@ const POLL_MS = 500;
 /** Resolved package.json directory (for --version). */
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/** Set while `runChatSession` is active so SIGINT/SIGHUP can stop polling and close embedded signaling. */
+let shutdownMesh: MeshCoordinator | null = null;
+let shutdownRl: readline.Interface | null = null;
+let shutdownHostedServer: RunningSignalingServer | undefined;
+let shutdownHooksInstalled = false;
+let shutdownInProgress = false;
+
+/**
+ * Registers once: SIGINT/SIGTERM and SIGHUP (Unix) to stop mesh polling, leave room, and close HTTP host.
+ */
+function installShutdownHooks(): void {
+  if (shutdownHooksInstalled) return;
+  shutdownHooksInstalled = true;
+  const go = async (sig: string): Promise<void> => {
+    if (shutdownInProgress) return;
+    shutdownInProgress = true;
+    console.error(`\n[textr] ${sig} — shutting down…`);
+    try {
+      shutdownRl?.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      shutdownMesh?.stopPolling();
+      await shutdownMesh?.leave().catch(() => {});
+    } catch {
+      /* ignore */
+    }
+    try {
+      await shutdownHostedServer?.close();
+    } catch {
+      /* ignore */
+    }
+    shutdownMesh = null;
+    shutdownRl = null;
+    shutdownHostedServer = undefined;
+    process.exit(0);
+  };
+  process.on("SIGINT", () => void go("SIGINT"));
+  process.on("SIGTERM", () => void go("SIGTERM"));
+  if (process.platform !== "win32") {
+    process.on("SIGHUP", () => void go("SIGHUP"));
+  }
+}
+
 type ParsedCli = { kind: "help" } | { kind: "version" } | { kind: "run" } | { kind: "unknown"; hint?: string };
 
 /**
- * Parses argv after `text-app`. The only user-facing command is bare `text-app`;
+ * Parses argv after `textr`. The only user-facing command is bare `textr`;
  * help and version are flags only (no subcommands).
  *
  * @param argv - `process.argv`.
@@ -57,7 +100,7 @@ function parseCliArgs(argv: string[]): ParsedCli {
   }
   return {
     kind: "unknown",
-    hint: "Only `text-app` (no arguments). Use `text-app --help` or `text-app -h`.",
+    hint: "Only `textr` (no arguments). Use `textr --help` or `textr -h`.",
   };
 }
 
@@ -86,18 +129,18 @@ function resolvedWantedHttpPort(): number {
 }
 
 /**
- * Prints usage for the single `text-app` entrypoint.
+ * Prints usage for the single `textr` entrypoint.
  */
 function printHelp(): void {
-  console.log(`text-app — LAN mesh chat (Plan A)
+  console.log(`textr — LAN mesh chat (Plan A)
 
 Usage:
-  text-app
-  text-app -h | --help
-  text-app -v | --version
+  textr
+  textr -h | --help
+  textr -v | --version
 
 Behavior:
-  Run \`text-app\` with no arguments. It discovers LAN signaling for implicit room ${LAN_DEFAULT_ROOM};
+  Run \`textr\` with no arguments. It discovers LAN signaling for implicit room ${LAN_DEFAULT_ROOM};
   if none is found, it starts signaling on this machine (host). Other machines then discover and join.
 
 Options:
@@ -107,8 +150,8 @@ Options:
 Environment:
   SIGNALING_BASE_URL         If set, skip discovery and join this URL (implicit room ${LAN_DEFAULT_ROOM})
   PORT                       HTTP signaling port when hosting / dev server (default 8787)
-  TEXTAPP_DISCOVERY_PORT     UDP discovery port; change on all peers if 8788 is taken
-  TEXTAPP_AUTO_DISCOVER_MS   LAN discovery window before hosting (default 1500)
+  TEXTR_DISCOVERY_PORT     UDP discovery port; change on all peers if 8788 is taken
+  TEXTR_AUTO_DISCOVER_MS   LAN discovery window before hosting (default 1500)
 `);
 }
 
@@ -130,16 +173,10 @@ function createPeerConnection(): RTCPeerConnection {
  * @param selfId - This session's client id (for direct targeting).
  */
 function printIncoming(env: ChatEnvelope, selfId: string): void {
-  let mode: string;
-  if (env.to === null) {
-    mode = "broadcast";
-  } else if (env.to === selfId) {
-    mode = env.groupId !== undefined ? `direct [group ${env.groupId}]` : "direct";
-  } else {
-    mode = "other";
-  }
+  const direct =
+    env.to !== null && env.to === selfId ? "direct" : env.to === null ? "broadcast" : "other";
   const ts = new Date(env.ts).toISOString();
-  console.log(`[${ts}] <${env.from}> (${mode}) ${env.body}`);
+  console.log(`[${ts}] <${env.from}> (${direct}) ${env.body}`);
 }
 
 type MenuOutcome = "done" | { migrateTo: string };
@@ -157,7 +194,7 @@ async function runMenu(
   migratePromise?: Promise<string>,
 ): Promise<MenuOutcome> {
   for (;;) {
-    console.log("\n--- Textapp menu ---");
+    console.log("\n--- Textr menu ---");
     console.log("1) List peers in room");
     console.log("2) Send direct (pick peer, then one line)");
     console.log("3) Send to everyone (one line)");
@@ -258,6 +295,11 @@ async function runChatSession(
     },
   });
 
+  shutdownMesh = mesh;
+  shutdownRl = rl;
+  shutdownHostedServer = hostedServer;
+  installShutdownHooks();
+
   let mergeTimer: ReturnType<typeof setInterval> | undefined;
   let migrateNotify: ((url: string) => void) | undefined;
   const migratePromise =
@@ -311,6 +353,7 @@ async function runChatSession(
     }
     skipMeshLeaveInFinally = true;
     await hostedServer?.close().catch(() => {});
+    shutdownHostedServer = undefined;
     console.error(`Reconnecting as client to ${outcome.migrateTo} …`);
     rl.close();
     await runChatSession(outcome.migrateTo, room);
@@ -331,6 +374,9 @@ async function runChatSession(
       });
     }
     rl.close();
+    shutdownMesh = null;
+    shutdownRl = null;
+    shutdownHostedServer = undefined;
   }
 }
 
@@ -346,7 +392,7 @@ async function runHostMode(room: string): Promise<void> {
     server = await startSignalingServer();
     console.error(`[host] HTTP signaling: ${server.localBaseUrl} (listening on all interfaces)`);
     console.error(`[host] Discovery: UDP port ${server.discoveryPort}`);
-    console.error(`[host] Room: ${room} — others on the LAN can run: text-app`);
+    console.error(`[host] Room: ${room} — others on the LAN can run: textr`);
     await runChatSession(server.localBaseUrl, room, server);
   } catch (e) {
     console.error("Host failed:", e instanceof Error ? e.message : e);
@@ -372,7 +418,7 @@ async function runLanAutoMode(): Promise<void> {
   }
 
   const portWanted = resolvedWantedHttpPort();
-  const rawMs = process.env.TEXTAPP_AUTO_DISCOVER_MS ?? "1500";
+  const rawMs = process.env.TEXTR_AUTO_DISCOVER_MS ?? "1500";
   const discoverTimeout = Number.isFinite(Number(rawMs)) && Number(rawMs) >= 200 ? Number(rawMs) : 1500;
 
   console.error(`Looking for LAN signaling (implicit room ${LAN_DEFAULT_ROOM})…`);
@@ -408,12 +454,12 @@ async function runLanAutoMode(): Promise<void> {
 }
 
 /**
- * Program entry: bare `text-app` runs LAN discover-or-host; `--help` / `--version` only.
+ * Program entry: bare `textr` runs LAN discover-or-host; `--help` / `--version` only.
  */
 async function main(): Promise<void> {
   const parsed = parseCliArgs(process.argv);
   if (parsed.kind === "unknown") {
-    console.error(parsed.hint ?? "Run `text-app --help`.");
+    console.error(parsed.hint ?? "Run `textr --help`.");
     process.exitCode = 1;
     return;
   }

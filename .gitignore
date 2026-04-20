@@ -1,8 +1,43 @@
+# Dependencies
 node_modules/
+
+# Build outputs (TypeScript, Vite, electron-vite)
 dist/
+out/
+
+# TypeScript incremental build info
 *.tsbuildinfo
 tsconfig.tsbuildinfo
+
+# Logs and local secrets
 *.log
 .env
 .env.local
+.env.*.local
+
+# Deploy / hosting metadata
 .vercel
+
+# Test coverage
+coverage/
+
+# Tooling caches
+.eslintcache
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+
+# Cursor IDE debug output (not part of the product)
+.cursor/debug*.log
+
+# Future Electron packaging output
+release/
+
+# Packaged installers copied from apps/desktop/release (large binaries)
+distributables/
+
+# Planning docs and internal reference (not part of shipped artifacts)
+PLAN*.md
+open-source-terminal.md
+icon-source.jpg

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Textr
+Comment=LAN mesh chat (Electron)
+# Prefer: npm run desktop:install-menu -w @textr/desktop (writes ~/.local/share/applications/textr.desktop).
+# Icon must be the PNG (e.g. …/apps/desktop/resources/icons/icon.png).
+# StartupWMClass should match app.setName("textr") and WM_CLASS from the running window.
+Exec=
+Icon=
+Terminal=false
+Categories=Network;InstantMessaging;
+StartupWMClass=textr

@@ -1,4 +1,4 @@
-# Textapp (Plan A)
+# Textr (Plan A)
 
 LAN-oriented **WebRTC mesh chat** with **HTTPS signaling** (SDP/ICE only) and a **terminal-only** client. Shared protocol and mesh logic live in `packages/core`; Plan B will reuse that package in the browser.
 
@@ -9,6 +9,7 @@ LAN-oriented **WebRTC mesh chat** with **HTTPS signaling** (SDP/ICE only) and a 
 | `packages/core` | Versioned JSON envelopes, 5-digit room validation, `MeshCoordinator` (inject `RTCPeerConnection` + `SignalingClient`) |
 | `packages/signaling` | In-memory signaling server (Express): join, leave, poll, signal — **no chat bodies** |
 | `apps/cli` | Node CLI using `wrtc` (`RTCPeerConnection` / `RTCDataChannel`) |
+| `apps/desktop` | Electron + Vite + React GUI; main process runs LAN discovery / optional embedded signaling (same as `textr`) |
 
 ## Prerequisites
 
@@ -19,19 +20,19 @@ LAN-oriented **WebRTC mesh chat** with **HTTPS signaling** (SDP/ICE only) and a 
 
 | Variable | Meaning |
 |----------|---------|
-| `SIGNALING_BASE_URL` | If set, `text-app` skips LAN discovery and joins this URL (implicit room **00000**). |
-| `PORT` | HTTP signaling port for `npm run dev:signaling` and for the embedded host in `text-app` (default **8787**). Must match across peers on the LAN. |
-| `TEXTAPP_DISCOVERY_PORT` | UDP discovery port (default **8788**). Use the same value on every machine if the default is blocked. |
-| `TEXTAPP_AUTO_DISCOVER_MS` | How long default mode listens for LAN signaling before hosting (default **1500**). |
+| `SIGNALING_BASE_URL` | If set, `textr` skips LAN discovery and joins this URL (implicit room **00000**). |
+| `PORT` | HTTP signaling port for `npm run dev:signaling` and for the embedded host in `textr` (default **8787**). Must match across peers on the LAN. |
+| `TEXTR_DISCOVERY_PORT` | UDP discovery port (default **8788**). Use the same value on every machine if the default is blocked. |
+| `TEXTR_AUTO_DISCOVER_MS` | How long default mode listens for LAN signaling before hosting (default **1500**). |
 
 The CLI does **not** print API keys; none are required for the in-memory dev server.
 
 ## Quick start on a LAN (recommended)
 
-There is **one** CLI command: **`text-app`**. Run it on every machine. The first machine on an empty network **starts signaling + discovery** (implicit room **00000**); everyone else **discovers** that host and joins.
+There is **one** CLI command: **`textr`**. Run it on every machine. The first machine on an empty network **starts signaling + discovery** (implicit room **00000**); everyone else **discovers** that host and joins.
 
 ```bash
-text-app
+textr
 ```
 
 Discovery **broadcasts UDP probes** on the LAN, collects signaling URLs, and connects to the **lexicographically smallest** URL among responders on the same `PORT` (so split-brain hosts converge). **No typing IP addresses.**
@@ -44,16 +45,6 @@ If two machines both started as host before seeing each other, a background **me
 
 **Discovery limits:** guest Wi‑Fi / AP isolation / some corporate networks block broadcast or device-to-device traffic; set **`SIGNALING_BASE_URL`** to a reachable `http://host:port` on every machine (below) as a fallback.
 
-## One-command dev (signaling + web UI)
-
-From the repo root (after `npm install`; `@textapp/core` is built automatically on first `dev` if needed):
-
-```bash
-npm run dev
-```
-
-This starts **HTTP signaling** (port **8787** by default) and the **Vite web app**, picks a **LAN IPv4** for `VITE_SIGNALING_BASE_URL` so other devices on your Wi‑Fi can use the same UI without editing env vars. Override the advertised host with `TEXTAPP_DEV_HOST` if the auto-picked address is wrong (VPN, multiple NICs).
-
 ## Run signaling only (classic dev)
 
 From the repo root:
@@ -63,8 +54,6 @@ npm install
 npm run build
 npm run dev:signaling
 ```
-
-**Build:** run `npm run build` from the **repository root** (not inside a single package). It compiles `@textapp/core`, then `@textapp/signaling`, then `@textapp/cli`, then `@textapp/web`, so dependents always see built `dist/` output. You can do install + build in one step with `npm run setup`.
 
 Listens on **TCP 8787** and **UDP 8788** (discovery). Override HTTP port with `PORT`.
 
@@ -79,20 +68,20 @@ npm run cli
 Or after build:
 
 ```bash
-npm run start -w @textapp/cli
+npm run start -w @textr/cli
 ```
 
 ### CLI (summary)
 
 | Command | Purpose |
 |---------|---------|
-| `text-app` | Discover LAN signaling (implicit room **00000**) or start host if none; optional `SIGNALING_BASE_URL` skips discovery |
-| `text-app --help` / `-h` | Usage and environment |
-| `text-app --version` / `-v` | Print CLI version |
+| `textr` | Discover LAN signaling (implicit room **00000**) or start host if none; optional `SIGNALING_BASE_URL` skips discovery |
+| `textr --help` / `-h` | Usage and environment |
+| `textr --version` / `-v` | Print CLI version |
 
 After connect: wait for mesh data channels, then use the menu (list peers, direct, broadcast, refresh, leave).
 
-### Use `text-app` from anywhere (global command)
+### Use `textr` from anywhere (global command)
 
 After a full install and build at the repo root:
 
@@ -102,18 +91,44 @@ npm run build
 npm run link-cli
 ```
 
-That runs `npm link` for the `@textapp/cli` workspace package so the `text-app` binary is on your PATH.
+That runs `npm link` for the `@textr/cli` workspace package so the `textr` binary is on your PATH.
 
-To remove the link later: `npm unlink -g @textapp/cli`.
+To remove the link later: `npm unlink -g @textr/cli`.
 
 **Alternative:** `npm install -g ./apps/cli` from the repo root after `npm install && npm run build` may work; if workspace packages do not resolve, use `npm run link-cli` instead.
 
-## Plan B integration
+## Plan B — Electron desktop (`@textr/desktop`)
 
-Import `@textapp/core` in the browser bundle. Provide:
+The **graphical** client uses the **same** implicit room (**00000**), **`HttpSignalingClient`**, and **`MeshCoordinator`** as the CLI. The **main process** performs **`collectSignalingBaseUrls` → canonical URL or `startSignalingServer()`** (and optional LAN merge while hosting), then exposes the resolved **`http://…`** base URL to the **renderer** via IPC. The renderer uses the browser’s **`RTCPeerConnection`** (no `wrtc`).
+
+**Dev:**
+
+```bash
+npm install
+npm run build   # build workspace packages used by main/renderer
+npm run desktop
+```
+
+Requires the same **LAN / firewall** expectations as `textr` (**`PORT`**, **`TEXTR_DISCOVERY_PORT`**, **`TEXTR_AUTO_DISCOVER_MS`**, optional **`SIGNALING_BASE_URL`**). The embedded signaling server enables **CORS** so the Vite dev origin can `fetch` a different host/port.
+
+**Icons:** Put a master image at the repo root as **`icon-source.jpg`** (large square-ish logo). Regenerate platform files into `apps/desktop/resources/icons/` with:
+
+```bash
+npm run icons -w @textr/desktop
+```
+
+That writes **`icon.png`** (Linux / window), **`icon.ico`** (Windows), and **`icon.icns`** (macOS packagers / Dock).
+
+On some Linux desktops (GNOME, etc.), the **dock** uses the **`.desktop`** database, not the in-window icon. Copy `apps/desktop/resources/linux/textr.desktop.template` to `~/.local/share/applications/textr.desktop`, set **`Exec=`** and **`Icon=`** to **absolute paths** (Icon should be `…/apps/desktop/resources/icons/icon.png`), run `update-desktop-database ~/.local/share/applications`, then log out/in or restart the shell.
+
+If the title bar still shows the wrong icon, run with **`TEXTR_DEBUG_ICON=1`** and check the printed **`icon PNG path`** in the terminal. Override the search path with **`TEXTR_DESKTOP_ROOT=/absolute/path/to/apps/desktop`** if needed.
+
+## Plan B integration (adapters)
+
+Import `@textr/core` in any JavaScript bundle. Provide:
 
 - A `SignalingClient` that uses `fetch` to the same HTTP routes (or a future WebSocket).
-- `createPeerConnection: () => new RTCPeerConnection(...)` from the browser.
+- `createPeerConnection: () => new RTCPeerConnection(...)` from the browser (or `wrtc` in Node).
 
 Only I/O adapters differ; **envelope JSON** and **mesh behavior** stay aligned.
 
@@ -124,7 +139,7 @@ If `8787` / `8788` are busy and `kill` says **Permission denied**, your IDE term
 **Workaround without freeing those ports:** use alternate ports (same values on every machine):
 
 ```bash
-PORT=18787 TEXTAPP_DISCOVERY_PORT=18788 text-app
+PORT=18787 TEXTR_DISCOVERY_PORT=18788 textr
 ```
 
 ## LAN limitations
@@ -144,8 +159,8 @@ Unit tests use Node’s built-in test runner (`node:test`) and cover room valida
 
 ### Two-process check (same LAN)
 
-1. On A: `text-app` (or `npm run dev:signaling` on A and `SIGNALING_BASE_URL=http://<A-IP>:8787` on both).
-2. On B: `text-app` (or the same `SIGNALING_BASE_URL` if you use the dev server).
+1. On A: `textr` (or `npm run dev:signaling` on A and `SIGNALING_BASE_URL=http://<A-IP>:8787` on both).
+2. On B: `textr` (or the same `SIGNALING_BASE_URL` if you use the dev server).
 3. Confirm **direct** and **broadcast** messages arrive with sender labels.
 
 Chat text flows **only** over `RTCDataChannel`; signaling stores **SDP/ICE** only.
@@ -160,4 +175,4 @@ The bundled server uses an **in-memory** store — fine for **one Node process**
 
 - **Room code:** exactly **5** decimal digits.
 - **Chat wire format:** JSON `ChatEnvelope` with `v`, `id`, `from`, `to` (`null` = broadcast), `body`, `ts`.
-- **Mesh:** pairwise `RTCPeerConnection` with one ordered data channel `textapp-chat`; lower `clientId` (string compare) sends the offer.
+- **Mesh:** pairwise `RTCPeerConnection` with one ordered data channel `textr-chat`; lower `clientId` (string compare) sends the offer.

@@ -1,14 +1,14 @@
 /**
  * @fileoverview UDP discovery client: finds signaling HTTP base URL on the LAN.
- * @module @textapp/signaling/discovery-client
+ * @module @textr/signaling/discovery-client
  */
 
 import dgram from "node:dgram";
 import os from "node:os";
 import {
   DEFAULT_DISCOVERY_PORT,
-  TEXTAPP_DISCOVER_V1,
-  TEXTAPP_SIGNALING_V1_PREFIX,
+  TEXTR_DISCOVER_V1,
+  TEXTR_SIGNALING_V1_PREFIX,
   type DiscoveryReplyMeta,
 } from "./discovery-protocol.js";
 
@@ -19,13 +19,13 @@ export type DiscoverOptions = {
 };
 
 /**
- * UDP discovery port from options, or `TEXTAPP_DISCOVERY_PORT`, or default 8788.
+ * UDP discovery port from options, or `TEXTR_DISCOVERY_PORT`, or default 8788.
  *
  * @param options - Optional explicit port from caller.
  */
 export function resolveDiscoveryPortFromEnv(options?: DiscoverOptions): number {
   if (options?.discoveryPort !== undefined) return options.discoveryPort;
-  const raw = process.env.TEXTAPP_DISCOVERY_PORT;
+  const raw = process.env.TEXTR_DISCOVERY_PORT;
   if (raw === undefined || raw === "") return DEFAULT_DISCOVERY_PORT;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 1 || n > 65535) return DEFAULT_DISCOVERY_PORT;
@@ -98,8 +98,8 @@ function intToDotted(n: number): string {
  */
 function parseReply(msg: Buffer): number | null {
   const s = msg.toString("utf8");
-  if (!s.startsWith(TEXTAPP_SIGNALING_V1_PREFIX)) return null;
-  const rest = s.slice(TEXTAPP_SIGNALING_V1_PREFIX.length).trim();
+  if (!s.startsWith(TEXTR_SIGNALING_V1_PREFIX)) return null;
+  const rest = s.slice(TEXTR_SIGNALING_V1_PREFIX.length).trim();
   try {
     const meta = JSON.parse(rest) as DiscoveryReplyMeta;
     if (typeof meta.httpPort !== "number" || meta.httpPort < 1 || meta.httpPort > 65535) {
@@ -120,7 +120,7 @@ function parseReply(msg: Buffer): number | null {
 export function discoverSignalingBaseUrl(options?: DiscoverOptions): Promise<string> {
   const timeoutMs = options?.timeoutMs ?? 3500;
   const discoveryPort = resolveDiscoveryPortFromEnv(options);
-  const payload = Buffer.from(TEXTAPP_DISCOVER_V1, "utf8");
+  const payload = Buffer.from(TEXTR_DISCOVER_V1, "utf8");
   const targets = broadcastTargets();
 
   return new Promise((resolve, reject) => {
@@ -132,7 +132,7 @@ export function discoverSignalingBaseUrl(options?: DiscoverOptions): Promise<str
       socket.close();
       reject(
         new Error(
-          "No Textapp signaling found on the LAN (discovery timed out). Is another machine running `text-app` on this network?",
+          "No Textr signaling found on the LAN (discovery timed out). Is another machine running `textr` on this network?",
         ),
       );
     }, timeoutMs);
@@ -192,7 +192,7 @@ export type CollectOptions = DiscoverOptions;
 export function collectSignalingBaseUrls(options?: CollectOptions): Promise<string[]> {
   const timeoutMs = options?.timeoutMs ?? 3500;
   const discoveryPort = resolveDiscoveryPortFromEnv(options);
-  const payload = Buffer.from(TEXTAPP_DISCOVER_V1, "utf8");
+  const payload = Buffer.from(TEXTR_DISCOVER_V1, "utf8");
   const targets = broadcastTargets();
 
   return new Promise((resolve, reject) => {

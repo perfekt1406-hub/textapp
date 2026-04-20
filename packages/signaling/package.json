@@ -1,5 +1,5 @@
 {
-  "name": "@textapp/signaling",
+  "name": "@textr/signaling",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,13 +12,13 @@
     }
   },
   "scripts": {
-    "build": "tsc -b tsconfig.json --force",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "dev": "node --import tsx/esm src/server.ts",
     "test": "node --import tsx/esm --test src/*.test.ts"
   },
   "dependencies": {
-    "@textapp/core": "*",
+    "@textr/core": "*",
     "express": "^4.21.2"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 /**
  * @fileoverview Builds the Express application for HTTP signaling (join/poll/signal).
- * @module @textapp/signaling/signaling-app
+ * @module @textr/signaling/signaling-app
  */
 
 import express from "express";
@@ -23,6 +23,19 @@ export type SignalingAppBundle = {
 export function createSignalingExpressApp(store = new MemorySignalingStore()): SignalingAppBundle {
   const handlers = createHttpHandlers(store);
   const app = express();
+
+  // Allow cross-origin fetches from the Electron renderer in dev (Vite origin ≠ signaling origin).
+  app.use((req, res, next): void => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
+
   app.use(express.json({ limit: "300kb" }));
 
   app.post("/join", handlers.join);

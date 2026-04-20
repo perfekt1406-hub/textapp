@@ -1,7 +1,7 @@
 /**
  * @fileoverview Transport-agnostic signaling message types for SDP/ICE exchange.
  * The HTTP signaling server and MeshCoordinator share this shape; no chat bodies.
- * @module @textapp/core/signaling-types
+ * @module @textr/core/signaling-types
  */
 
 /** One SDP or ICE payload exchanged through signaling (never chat text). */

@@ -1,7 +1,8 @@
 /**
- * @fileoverview LAN signaling URL helpers: canonical host selection for implicit single-room
- * mode and detection of whether a discovered URL refers to this machine.
- * @module @textapp/cli/lan-discovery
+ * @fileoverview LAN signaling URL helpers: canonical host selection for implicit
+ * single-room mode and detection of whether a discovered URL refers to this machine.
+ * Shared by the CLI and Electron main process (Plan B).
+ * @module @textr/signaling/lan-discovery
  */
 
 import os from "node:os";
@@ -10,6 +11,7 @@ import os from "node:os";
  * Parses HTTP port from a signaling base URL (defaults 80/443 if omitted).
  *
  * @param baseUrl - e.g. http://192.168.1.2:8787
+ * @returns Parsed port, or null if invalid.
  */
 export function httpPortFromBaseUrl(baseUrl: string): number | null {
   try {

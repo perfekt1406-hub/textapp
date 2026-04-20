@@ -1,5 +1,5 @@
 {
-  "name": "textapp",
+  "name": "textr",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -7,16 +7,19 @@
     "apps/*"
   ],
   "scripts": {
-    "setup": "npm install && npm run build",
-    "dev": "node scripts/dev.mjs",
-    "build": "npm run build -w @textapp/core && npm run build -w @textapp/signaling && npm run build -w @textapp/cli && npm run build -w @textapp/web",
+    "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
-    "cli": "npm run start -w @textapp/cli",
-    "web": "npm run dev -w @textapp/web",
-    "link-cli": "npm run build -w @textapp/cli && npm link -w @textapp/cli",
-    "signaling": "npm run start -w @textapp/signaling",
-    "dev:signaling": "npm run dev -w @textapp/signaling"
+    "cli": "npm run start -w @textr/cli",
+    "link-cli": "npm run build -w @textr/cli && npm link -w @textr/cli",
+    "signaling": "npm run start -w @textr/signaling",
+    "dev:signaling": "npm run dev -w @textr/signaling",
+    "desktop": "npm run dev -w @textr/desktop",
+    "desktop:dist": "npm run dist -w @textr/desktop",
+    "desktop:dist:lw": "npm run dist:lw -w @textr/desktop",
+    "desktop:dist:mac": "npm run dist:mac -w @textr/desktop",
+    "desktop:dist:dir": "npm run dist:dir -w @textr/desktop",
+    "icons": "npm run icons -w @textr/desktop"
   },
   "devDependencies": {
     "@eslint/js": "^9.16.0",
@@ -24,8 +27,8 @@
     "eslint": "^9.16.0",
     "globals": "^15.13.0",
     "prettier": "^3.4.2",
-    "typescript": "^5.7.2",
     "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0"
   },
   "engines": {

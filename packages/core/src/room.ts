@@ -1,7 +1,7 @@
 /**
  * @fileoverview Room code validation helpers: exactly five decimal digits (00000–99999).
  * Used by signaling and clients for consistent LAN-oriented room identity.
- * @module @textapp/core/room
+ * @module @textr/core/room
  */
 
 /**

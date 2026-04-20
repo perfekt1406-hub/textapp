@@ -2,7 +2,7 @@
  * @fileoverview In-memory signaling store: rooms, rosters, per-client SDP/ICE queues.
  * Suitable for local dev and single-process LAN tests; Vercel serverless requires an
  * external store (see README).
- * @module @textapp/signaling/memory-store
+ * @module @textr/signaling/memory-store
  */
 
 import type { QueuedSignal, WireSignalPayload } from "./types.js";

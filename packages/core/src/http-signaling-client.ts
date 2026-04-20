@@ -1,7 +1,7 @@
 /**
  * @fileoverview HTTP `fetch` implementation of `SignalingClient` for the Plan A CLI and
  * Plan B browser (same routes as `packages/signaling` Express app).
- * @module @textapp/core/http-signaling-client
+ * @module @textr/core/http-signaling-client
  */
 
 import type {

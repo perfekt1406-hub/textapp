@@ -1,0 +1,89 @@
+{
+  "name": "@textr/desktop",
+  "productName": "Textr",
+  "desktopName": "textr.desktop",
+  "description": "LAN mesh chat (WebRTC) — Electron shell",
+  "author": "Textr",
+  "homepage": "https://example.com",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "out/main/main.js",
+  "build": {
+    "appId": "app.textr.desktop",
+    "productName": "Textr",
+    "copyright": "Copyright © 2026 Textr",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources/icons"
+    },
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "files": ["out/**/*", "package.json"],
+    "extraResources": [
+      {
+        "from": "resources/icons",
+        "to": "icons",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "resources/linux",
+        "to": "linux",
+        "filter": ["**/*"]
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "executableName": "textr",
+      "category": "Network",
+      "synopsis": "LAN mesh chat (WebRTC)",
+      "maintainer": "textr"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.social-networking"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "scripts": {
+    "desktop": "env CHROME_DESKTOP=textr.desktop ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
+    "dev": "env CHROME_DESKTOP=textr.desktop ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
+    "build": "electron-vite build",
+    "dist": "npm run build && electron-builder",
+    "dist:lw": "npm run build && electron-builder --linux --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "preview": "env CHROME_DESKTOP=textr.desktop ELECTRON_DISABLE_SANDBOX=1 electron-vite preview",
+    "icons": "node ./scripts/generate-icons.mjs",
+    "desktop:install-menu": "node ./scripts/install-linux-desktop.mjs"
+  },
+  "dependencies": {
+    "@textr/core": "*",
+    "@textr/signaling": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "34.5.8",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "png-to-ico": "^3.0.1",
+    "png2icons": "^2.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.34.5",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

@@ -1,4 +1,4 @@
-// eslint.config.js — root ESLint flat config for the Textapp monorepo.
+// eslint.config.js — root ESLint flat config for the Textr monorepo.
 import eslint from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";

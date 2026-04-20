@@ -2,7 +2,7 @@
  * @fileoverview Versioned chat message envelope types and JSON serialization for
  * RTCDataChannel payloads. Direct vs broadcast is encoded via `to`: a string peer id
  * for direct messages, or null for application-level broadcast.
- * @module @textapp/core/envelope
+ * @module @textr/core/envelope
  */
 
 /** Current wire protocol version for ChatEnvelope JSON. */
@@ -26,10 +26,7 @@ export type ChatEnvelope = {
   body: string;
   /** Client-side Unix epoch milliseconds when the message was composed. */
   ts: number;
-  /**
-   * When set on a direct envelope, recipients route the message into a named group
-   * thread (subset chat) instead of a plain 1:1 DM. Omitted for broadcast and DMs.
-   */
+  /** Optional UI thread id (ignored by mesh routing if unset). */
   groupId?: string;
 };
 
@@ -45,10 +42,9 @@ export function createChatEnvelope(params: {
   to: string | null;
   body: string;
   ts: number;
-  /** Optional group thread id; only meaningful when `to` is a peer id. */
   groupId?: string;
 }): ChatEnvelope {
-  const env: ChatEnvelope = {
+  const e: ChatEnvelope = {
     v: PROTOCOL_VERSION,
     id: params.id,
     from: params.from,
@@ -57,9 +53,9 @@ export function createChatEnvelope(params: {
     ts: params.ts,
   };
   if (params.groupId !== undefined) {
-    env.groupId = params.groupId;
+    e.groupId = params.groupId;
   }
-  return env;
+  return e;
 }
 
 /**
@@ -97,14 +93,12 @@ export function parseChatEnvelope(raw: string): ChatEnvelope | Error {
   if (typeof o.ts !== "number" || !Number.isFinite(o.ts)) {
     return new Error("Invalid envelope ts");
   }
-  let groupId: string | undefined;
   if (o.groupId !== undefined) {
     if (typeof o.groupId !== "string" || o.groupId.length === 0) {
-      return new Error("Invalid envelope groupId");
+      return new Error("Invalid envelope groupId (must be non-empty string if present)");
     }
-    groupId = o.groupId;
   }
-  const env: ChatEnvelope = {
+  const out: ChatEnvelope = {
     v: PROTOCOL_VERSION,
     id: o.id,
     from: o.from,
@@ -112,10 +106,10 @@ export function parseChatEnvelope(raw: string): ChatEnvelope | Error {
     body: o.body,
     ts: o.ts,
   };
-  if (groupId !== undefined) {
-    env.groupId = groupId;
+  if (typeof o.groupId === "string" && o.groupId.length > 0) {
+    out.groupId = o.groupId;
   }
-  return env;
+  return out;
 }
 
 /**

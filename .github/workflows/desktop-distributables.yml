@@ -1,0 +1,79 @@
+# desktop-distributables.yml
+# Builds Textr desktop installers and uploads CI artifacts.
+# Linux and Windows targets can be built on ubuntu-latest; macOS requires a macOS
+# runner (Apple tooling), so a separate job runs on macos-latest.
+
+name: Desktop distributables
+
+on:
+  workflow_dispatch:
+
+jobs:
+  linux-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      # npm ci — installs workspace dependencies from package-lock.json (inputs: repo root; outputs: node_modules).
+      - name: Install dependencies
+        run: npm ci
+
+      # npm run build — compiles the desktop app via electron-vite (inputs: workspace; outputs: apps/desktop/out).
+      - name: Build desktop bundle
+        run: npm run build -w @textr/desktop
+
+      # electron-builder — packages Electron apps for --linux and --win (inputs: apps/desktop; outputs: apps/desktop/release).
+      - name: Package Linux and Windows installers
+        working-directory: apps/desktop
+        run: npx electron-builder --linux --win
+
+      # actions/upload-artifact — stores workflow artifacts for download (inputs: files; outputs: artifact ZIP on GitHub).
+      - name: Upload Linux and Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: textr-linux-windows
+          if-no-files-found: error
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.exe
+
+  macos:
+    runs-on: macos-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build desktop bundle
+        run: npm run build -w @textr/desktop
+
+      - name: Package macOS installers
+        working-directory: apps/desktop
+        run: npx electron-builder --mac
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: textr-macos
+          if-no-files-found: error
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip

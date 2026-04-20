@@ -1,6 +1,6 @@
 /**
  * @fileoverview Internal signaling wire types (SDP/ICE only) shared by HTTP handlers.
- * @module @textapp/signaling/types
+ * @module @textr/signaling/types
  */
 
 /** Payload kinds exchanged via signaling (never chat bodies). */

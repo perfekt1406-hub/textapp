@@ -1,13 +1,13 @@
 /**
- * @fileoverview UDP responder: replies to TEXTAPP_DISCOVER_V1 with HTTP port for signaling.
- * @module @textapp/signaling/discovery-responder
+ * @fileoverview UDP responder: replies to TEXTR_DISCOVER_V1 with HTTP port for signaling.
+ * @module @textr/signaling/discovery-responder
  */
 
 import dgram from "node:dgram";
 import {
   DEFAULT_DISCOVERY_PORT,
-  TEXTAPP_DISCOVER_V1,
-  TEXTAPP_SIGNALING_V1_PREFIX,
+  TEXTR_DISCOVER_V1,
+  TEXTR_SIGNALING_V1_PREFIX,
   type DiscoveryReplyMeta,
 } from "./discovery-protocol.js";
 
@@ -36,10 +36,10 @@ export function startDiscoveryResponder(
     });
 
     socket.on("message", (msg, rinfo) => {
-      if (msg.toString("utf8") !== TEXTAPP_DISCOVER_V1) return;
+      if (msg.toString("utf8") !== TEXTR_DISCOVER_V1) return;
       const meta: DiscoveryReplyMeta = { httpPort };
       const body = Buffer.from(
-        `${TEXTAPP_SIGNALING_V1_PREFIX}${JSON.stringify(meta)}\n`,
+        `${TEXTR_SIGNALING_V1_PREFIX}${JSON.stringify(meta)}\n`,
         "utf8",
       );
       socket.send(body, rinfo.port, rinfo.address, (sendErr) => {

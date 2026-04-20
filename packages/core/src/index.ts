@@ -1,6 +1,6 @@
 /**
- * @fileoverview @textapp/core — protocol envelopes, room validation, mesh orchestration.
- * @module @textapp/core
+ * @fileoverview @textr/core — protocol envelopes, room validation, mesh orchestration.
+ * @module @textr/core
  */
 
 export {

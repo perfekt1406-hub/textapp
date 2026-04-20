@@ -1,6 +1,6 @@
 /**
  * @fileoverview Programmatic HTTP + UDP discovery lifecycle for embedding or CLI host mode.
- * @module @textapp/signaling/signaling-server
+ * @module @textr/signaling/signaling-server
  */
 
 import type { Server } from "node:http";
@@ -33,11 +33,11 @@ export type RunningSignalingServer = {
  * @param options - Ports and bind address.
  */
 /**
- * Parses `TEXTAPP_DISCOVERY_PORT` when options do not set discovery port.
+ * Parses `TEXTR_DISCOVERY_PORT` when options do not set discovery port.
  */
 function resolveDiscoveryListenPort(explicit?: number): number {
   if (explicit !== undefined) return explicit;
-  const raw = process.env.TEXTAPP_DISCOVERY_PORT;
+  const raw = process.env.TEXTR_DISCOVERY_PORT;
   if (raw === undefined || raw === "") return DEFAULT_DISCOVERY_PORT;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 1 || n > 65535) return DEFAULT_DISCOVERY_PORT;

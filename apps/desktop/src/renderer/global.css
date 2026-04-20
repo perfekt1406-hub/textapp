@@ -1,0 +1,225 @@
+/**
+ * Desktop chat shell styles: imports repo-wide tokens from `design-system.css`, then app layout.
+ */
+
+@import "../../../../design-system.css";
+
+/* App shell — terminal man-page layout: calm hierarchy, minimal chrome */
+.textr-root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+}
+
+.textr-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  min-height: 0;
+}
+
+@media (max-width: 767px) {
+  .textr-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.textr-sidebar {
+  border-right: var(--border-thin) solid var(--color-border-subtle);
+  background: var(--color-surface-sunken);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.textr-brand {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-thin) solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+}
+
+.textr-roster {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-3) 0;
+}
+
+.textr-roster button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  border-left: var(--border-thick) solid transparent;
+  transition: var(--transition-colors);
+}
+
+.textr-roster button:hover {
+  background: var(--color-surface-raised);
+}
+
+.textr-roster button[data-active="true"] {
+  border-left-color: var(--color-primary-400);
+  background: var(--color-surface);
+  color: var(--color-link);
+}
+
+.textr-peer-id {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  padding-inline: var(--space-5);
+  padding-block: var(--space-2);
+}
+
+.textr-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-bg);
+}
+
+.textr-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: var(--border-thin) solid var(--color-border-subtle);
+  background: var(--color-surface);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.textr-toolbar strong {
+  color: var(--color-text-primary);
+  font-weight: var(--font-medium);
+}
+
+.textr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--btn-height-sm);
+  padding-inline: var(--btn-padding-x-sm);
+  font-size: var(--btn-font-size-sm);
+  border-radius: var(--btn-radius);
+  border: var(--border-thin) solid var(--color-border-default);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  transition: var(--transition-colors);
+  box-shadow: var(--shadow-1);
+}
+
+.textr-btn:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-link);
+}
+
+.textr-btn-primary {
+  border-color: hsl(152, 40%, 28%);
+  background: hsl(152, 48%, 22%);
+  color: var(--color-text-on-brand);
+}
+
+.textr-btn-primary:hover {
+  border-color: hsl(152, 45%, 34%);
+  color: var(--color-text-on-brand);
+}
+
+.textr-thread {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-5);
+  font-size: var(--text-sm);
+}
+
+.textr-line {
+  margin-bottom: var(--space-4);
+  max-width: 100%;
+}
+
+.textr-line-meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-1);
+}
+
+.textr-line-body {
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.textr-tag {
+  display: inline-block;
+  margin-left: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-accent-400);
+  text-transform: lowercase;
+}
+
+.textr-compose {
+  border-top: var(--border-thin) solid var(--color-border-subtle);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface-sunken);
+}
+
+.textr-compose textarea {
+  width: 100%;
+  min-height: 4.5rem;
+  padding: var(--space-3);
+  border-radius: var(--input-radius);
+  border: var(--border-thin) solid var(--color-border-default);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  resize: vertical;
+}
+
+.textr-compose textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-color: hsl(152, 40%, 32%);
+}
+
+.textr-banner {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-thin) solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+}
+
+.textr-banner[data-tone="info"] {
+  background: hsl(199, 40%, 14%);
+  color: var(--color-info-light);
+}
+
+.textr-banner[data-tone="error"] {
+  background: hsl(0, 35%, 16%);
+  color: var(--color-error-light);
+}
+
+.textr-banner[data-tone="neutral"] {
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+}
+
+@media (prefers-color-scheme: light) {
+  .textr-banner[data-tone="info"] {
+    background: hsl(199, 45%, 92%);
+    color: var(--color-info-dark);
+  }
+  .textr-banner[data-tone="error"] {
+    background: hsl(0, 50%, 94%);
+    color: var(--color-error-dark);
+  }
+}

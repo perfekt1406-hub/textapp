@@ -1,19 +1,19 @@
 {
-  "name": "@textapp/cli",
+  "name": "@textr/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "text-app": "./dist/main.js"
+    "textr": "./dist/main.js"
   },
   "scripts": {
-    "build": "tsc -b tsconfig.json --force",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "dev": "node --import tsx/esm src/main.ts"
   },
   "dependencies": {
-    "@textapp/core": "*",
-    "@textapp/signaling": "*",
+    "@textr/core": "*",
+    "@textr/signaling": "*",
     "wrtc": "^0.4.7"
   },
   "devDependencies": {
