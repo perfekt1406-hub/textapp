@@ -1,0 +1,16 @@
+# Textr monorepo — tool output and local secrets.
+node_modules/
+dist/
+out/
+release/
+.pnpm-store/
+.pnpm-debug.log
+.env
+.env.local
+**/.env
+**/.env.local
+.DS_Store
+*.log
+# Built app bundles — use GitHub Releases, not the repo
+distributables/*
+!distributables/.gitkeep

@@ -1,0 +1,27 @@
+/**
+ * @fileoverview @textr/core — protocol envelopes, room validation, mesh orchestration.
+ * @module @textr/core
+ */
+
+export {
+  PROTOCOL_VERSION,
+  type ChatEnvelope,
+  createChatEnvelope,
+  parseChatEnvelope,
+  serializeChatEnvelope,
+} from "./envelope.js";
+export {
+  isValidRoomCode,
+  LAN_DEFAULT_ROOM,
+  normalizeRoomInput,
+  parseRoomCodeOrError,
+} from "./room.js";
+export { MeshCoordinator, type MeshCallbacks, type MeshCoordinatorOptions } from "./mesh.js";
+export type {
+  AddressedSignal,
+  JoinResult,
+  PollResult,
+  SignalingClient,
+  SignalPayload,
+} from "./signaling-types.js";
+export { HttpSignalingClient } from "./http-signaling-client.js";

@@ -1,0 +1,23 @@
+{
+  "name": "@textr/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "textr": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "dev": "node --import tsx/esm src/main.ts"
+  },
+  "dependencies": {
+    "@textr/core": "workspace:*",
+    "@textr/signaling": "workspace:*",
+    "wrtc": "^0.4.7"
+  },
+  "devDependencies": {
+    "@mapbox/node-pre-gyp": "^2.0.0",
+    "tsx": "^4.19.2"
+  }
+}

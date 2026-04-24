@@ -1,0 +1,38 @@
+{
+  "name": "textr",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r --if-present run build",
+    "test": "pnpm -r --if-present run test",
+    "lint": "eslint .",
+    "cli": "pnpm --filter @textr/cli start",
+    "link-cli": "pnpm --filter @textr/cli build && pnpm --filter @textr/cli link --global",
+    "signaling": "pnpm --filter @textr/signaling start",
+    "dev:signaling": "pnpm --filter @textr/signaling dev",
+    "desktop": "pnpm --filter @textr/desktop dev",
+    "desktop:dist": "pnpm --filter @textr/desktop dist",
+    "desktop:dist:lw": "pnpm --filter @textr/desktop dist:lw",
+    "desktop:dist:mac": "pnpm --filter @textr/desktop dist:mac",
+    "desktop:dist:dir": "pnpm --filter @textr/desktop dist:dir",
+    "icons": "pnpm --filter @textr/desktop icons"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.16.0",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.16.0",
+    "globals": "^15.13.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,4 @@
+# Declares Textr monorepo packages for pnpm (mirrors root package.json "workspaces").
+packages:
+  - "packages/*"
+  - "apps/*"
